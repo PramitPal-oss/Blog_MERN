@@ -1,0 +1,10 @@
+process.env.JWT_ACCESS_SECRET = "test-access-secret-at-least-32-characters";
+process.env.JWT_REFRESH_SECRET = "test-refresh-secret-at-least-32-characters";
+process.env.AUTH_RATE_MAX = "1000";
+process.env.LOGIN_RATE_MAX = "1000";
+process.env.REGISTER_RATE_MAX = "1000";
+process.env.OAUTH_RATE_MAX = "1000";
+process.env.GOOGLE_CLIENT_ID = "";
+process.env.GOOGLE_CLIENT_SECRET = "";
+process.env.FACEBOOK_CLIENT_ID = "";
+process.env.FACEBOOK_CLIENT_SECRET = "";

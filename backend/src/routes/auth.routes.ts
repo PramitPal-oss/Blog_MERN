@@ -1,0 +1,23 @@
+import { Router } from "express";
+import * as controller from "../controllers/auth.controller.js";
+import { validate } from "../middleware/validate.js";
+import { registerSchema, loginSchema } from "../validators/auth.schemas.js";
+import { noBody } from "../validators/common.schemas.js";
+import { authenticate } from "../middleware/authenticate.js";
+import { authLimiter, loginLimiter, oauthLimiter, registerLimiter } from "../middleware/rate-limit.js";
+import { trustedOrigin } from "../middleware/trusted-origin.js";
+
+export const authRouter = Router();
+authRouter.use(authLimiter);
+authRouter.post("/register", registerLimiter, trustedOrigin, validate({ body: registerSchema }), controller.register);
+authRouter.post("/login", loginLimiter, trustedOrigin, validate({ body: loginSchema }), controller.login);
+authRouter.post("/refresh", trustedOrigin, validate({ body: noBody }), controller.refresh);
+authRouter.post("/logout", trustedOrigin, validate({ body: noBody }), controller.logout);
+authRouter.get("/me", authenticate, controller.me);
+authRouter.get("/providers", controller.providers);
+authRouter.get("/google", oauthLimiter, controller.oauthStart("google"));
+authRouter.get("/facebook", oauthLimiter, controller.oauthStart("facebook"));
+authRouter.get("/google/callback", controller.oauthCallback("google"));
+authRouter.get("/facebook/callback", controller.oauthCallback("facebook"));
+authRouter.post("/google/link", trustedOrigin, authenticate, validate({ body: noBody }), controller.oauthLink("google"));
+authRouter.post("/facebook/link", trustedOrigin, authenticate, validate({ body: noBody }), controller.oauthLink("facebook"));

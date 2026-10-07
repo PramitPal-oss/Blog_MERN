@@ -1,0 +1,10 @@
+import type { RequestHandler } from "express";
+import * as service from "../services/posts.service.js";
+import { sendSuccess } from "../utils/responses.js";
+const meta = (page: number, limit: number, total: number) => ({ page, limit, total, totalPages: total ? Math.ceil(total / limit) : 0 });
+export const list: RequestHandler = async (req, res) => { const { page, limit, authorId } = req.validated!.query; const result = await service.listPosts(page, limit, authorId, req.auth?.userId); sendSuccess(res, 200, "Posts retrieved", result.items, meta(page, limit, result.total)); };
+export const bySlug: RequestHandler = async (req, res) => sendSuccess(res, 200, "Post retrieved", await service.getPost(req.validated!.params.slug, true, req.auth?.userId));
+export const get: RequestHandler = async (req, res) => sendSuccess(res, 200, "Post retrieved", await service.getPost(req.validated!.params.id, false, req.auth?.userId));
+export const create: RequestHandler = async (req, res) => { const value = await service.createPost(req.auth!.userId, req.validated!.body); req.activity = { action: "POST_CREATE", resourceType: "post", resourceId: value.id }; sendSuccess(res, 201, "Post created", value); };
+export const update: RequestHandler = async (req, res) => { const value = await service.updatePost(req.validated!.params.id, req.validated!.body); req.activity = { action: "POST_UPDATE", resourceType: "post", resourceId: value.id }; sendSuccess(res, 200, "Post updated", value); };
+export const remove: RequestHandler = async (req, res) => { const value = await service.deletePost(req.validated!.params.id); req.activity = { action: "POST_DELETE", resourceType: "post", resourceId: value.id }; sendSuccess(res, 200, "Post deleted", value); };

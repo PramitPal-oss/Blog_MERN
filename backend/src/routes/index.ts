@@ -1,0 +1,14 @@
+import { Router } from "express";
+import { authRouter } from "./auth.routes.js";
+import { usersRouter } from "./users.routes.js";
+import { postsRouter } from "./posts.routes.js";
+import { commentsRouter } from "./comments.routes.js";
+import { adminRouter } from "./admin.routes.js";
+import { notificationsRouter } from "./notification.routes.js";
+export const apiRouter = Router();
+apiRouter.use("/auth", authRouter);
+apiRouter.use("/users", usersRouter);
+apiRouter.use("/posts", postsRouter);
+apiRouter.use("/comments", commentsRouter);
+apiRouter.use("/admin", adminRouter);
+apiRouter.use("/notifications", notificationsRouter);

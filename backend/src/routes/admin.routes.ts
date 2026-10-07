@@ -1,0 +1,12 @@
+import { Router } from "express";
+import { z } from "zod";
+import * as controller from "../controllers/admin.controller.js";
+import { authenticate } from "../middleware/authenticate.js";
+import { authorizeRoles } from "../middleware/authorize-roles.js";
+import { validate } from "../middleware/validate.js";
+import { objectId, pagination } from "../validators/common.schemas.js";
+export const adminRouter = Router();
+adminRouter.use(authenticate, authorizeRoles("ADMIN"));
+adminRouter.get("/stats", controller.stats);
+adminRouter.get("/posts", validate({ query: pagination.extend({ status: z.enum(["active", "deleted", "all"]).default("active") }).strict() }), controller.posts);
+adminRouter.get("/comments", validate({ query: pagination.extend({ postId: objectId.optional() }).strict() }), controller.comments);

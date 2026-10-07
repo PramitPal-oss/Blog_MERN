@@ -1,0 +1,26 @@
+import express from "express";
+import cors from "cors";
+import helmet from "helmet";
+import cookieParser from "cookie-parser";
+import { env } from "./config/env.js";
+import { passport } from "./config/passport.js";
+import { requestId } from "./middleware/request-id.js";
+import { activityLog } from "./middleware/activity-log.js";
+import { apiRouter } from "./routes/index.js";
+import { errorHandler, notFound } from "./middleware/error-handler.js";
+import { sendSuccess } from "./utils/responses.js";
+
+export const app = express();
+if (env.TRUST_PROXY_HOPS > 0) app.set("trust proxy", env.TRUST_PROXY_HOPS);
+app.disable("x-powered-by");
+app.use(requestId);
+app.use(env.NODE_ENV === "production" ? helmet() : helmet({ contentSecurityPolicy: false }));
+app.use(cors({ origin: env.FRONTEND_URL, credentials: true }));
+app.use(express.json({ limit: "256kb" }));
+app.use(cookieParser());
+app.use(passport.initialize());
+app.use(activityLog);
+app.get("/health", (_req, res) => sendSuccess(res, 200, "Service healthy", { status: "ok" }));
+app.use("/api/v1", apiRouter);
+app.use(notFound);
+app.use(errorHandler);

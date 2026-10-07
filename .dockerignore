@@ -1,0 +1,17 @@
+.git
+.github
+.agents
+.codex
+node_modules
+**/node_modules
+**/dist
+**/coverage
+**/.vite
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+!**/.env.example
+*.log
+tmp
+mern-blog-assignment.zip
+BlogSphere MERN Blog UI_UX Mockup Board.png

@@ -1,0 +1,17 @@
+import { Router } from "express";
+import { z } from "zod";
+import * as controller from "../controllers/users.controller.js";
+import { authenticate } from "../middleware/authenticate.js";
+import { authorizeRoles } from "../middleware/authorize-roles.js";
+import { trustedOrigin } from "../middleware/trusted-origin.js";
+import { validate } from "../middleware/validate.js";
+import { objectId, pagination, noBody } from "../validators/common.schemas.js";
+import { userCreateSchema, userUpdateSchema } from "../validators/users.schemas.js";
+export const usersRouter = Router();
+const idParams = z.object({ id: objectId }).strict();
+usersRouter.use(authenticate, authorizeRoles("ADMIN"));
+usersRouter.get("/", validate({ query: pagination }), controller.list);
+usersRouter.get("/:id", validate({ params: idParams }), controller.get);
+usersRouter.post("/", trustedOrigin, validate({ body: userCreateSchema }), controller.create);
+usersRouter.patch("/:id", trustedOrigin, validate({ params: idParams, body: userUpdateSchema }), controller.update);
+usersRouter.delete("/:id", trustedOrigin, validate({ params: idParams, body: noBody }), controller.remove);
