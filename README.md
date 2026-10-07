@@ -1,309 +1,431 @@
 # Inkstone MERN Blog
 
-Inkstone is a complete blog application built for the supplied MERN Stack assignment. It supports local and social authentication, rotating refresh sessions, role-based administration, post and comment ownership, soft-deleted posts, activity logging, pagination, tests, and a responsive React interface.
+Inkstone is a full-stack blog application built with MongoDB, Express, React, and Node.js. It includes local and social authentication, role-based administration, post and comment ownership, likes, persistent real-time notifications, pagination, tests, and optional development seed data.
+
+## Table of contents
+
+- [Features](#features)
+- [Technology](#technology)
+- [Quick start with Docker](#quick-start-with-docker)
+- [Start without Docker](#start-without-docker)
+- [Use Docker only for MongoDB](#use-docker-only-for-mongodb)
+- [Seed data](#seed-data)
+- [Environment variables](#environment-variables)
+- [Architecture](#architecture)
+- [Navigating the application](#navigating-the-application)
+- [Useful commands](#useful-commands)
+- [API overview](#api-overview)
+- [OAuth setup](#oauth-setup)
+- [Production notes](#production-notes)
 
 ## Features
 
-- Email/password registration, login, refresh, and logout
-- Short-lived JWT access tokens held in memory
-- Rotating refresh JWTs in HttpOnly cookies with reuse detection and revocation
-- Google and Facebook OAuth 2.0 login and explicit account linking
+- Email/password registration and login with short-lived access tokens and rotating refresh sessions
+- Optional Google and Facebook OAuth login and account linking
 - `USER` and `ADMIN` roles enforced by the API
-- Blog post CRUD with stable URL slugs, ownership, pagination, and soft deletion
-- Referenced comment CRUD with ownership and admin moderation
-- Real-time comment notifications using authenticated Socket.io with persistent MongoDB storage
-- Notification bell, unread badge, popover dropdown, mark as read, and pagination
-- Admin dashboard with user, active-post, and visible-comment totals
-- Full admin management for users, posts, and comments
-- Structured activity logs, rate limits, Helmet, CORS, strict validation, and safe errors
-- Jest/Supertest/MongoDB integration tests and Vitest/React Testing Library tests
-- Optional idempotent development seed data
+- Post CRUD, stable URL slugs, pagination, likes, ownership checks, and soft deletion
+- Nested comment CRUD, likes, ownership checks, and admin moderation
+- Persistent real-time notifications using MongoDB and authenticated Socket.io connections
+- Admin dashboard and management pages for users, posts, and comments
+- Zod validation, Helmet, CORS, rate limiting, structured activity logs, and centralized errors
+- Backend Jest/Supertest tests and frontend Vitest/Testing Library tests
+- Docker Compose setup and idempotent development seed data
 
 ## Technology
 
 | Area | Stack |
 | --- | --- |
-| Frontend | React 19, Vite, TypeScript, React Router, Tailwind CSS 4, shadcn/ui (Radix primitives), Lucide React, Axios, React Hook Form, Zod, Socket.io Client |
+| Frontend | React 19, Vite, TypeScript, React Router, Tailwind CSS 4, shadcn/ui, Axios, React Hook Form, Zod, Socket.io Client |
 | Backend | Node.js 24, Express 5, TypeScript, Mongoose, Passport, Pino, Socket.io |
-| Database | MongoDB |
-| Security | bcrypt, JWT, Helmet, CORS, rate limiting, HttpOnly cookies |
-| Tests | Jest, Supertest, mongodb-memory-server, Vitest, Testing Library |
-
-## Architecture
-
-```text
-React UI / AuthContext
-        |
-   Axios client
-        |
-    /api/v1 REST
-        |
-Express routes -> validation/security middleware -> controllers
-        |                                         |
-        +---------------- services ---------------+
-                              |
-                     Mongoose models
-                              |
-                           MongoDB
-```
-
-Controllers translate HTTP requests and responses. Services own business rules. Models define storage and indexes. Middleware handles authentication, roles, ownership, validation, rate limits, origin checks, logging, and errors.
-
-```text
-backend/src/
-  config/ controllers/ middleware/ models/ routes/
-  services/ tests/ types/ utils/ validators/
-frontend/src/
-  api/ components/ context/ layouts/ pages/
-  routes/ styles/ tests/ types/
-```
+| Database | MongoDB 8 |
+| Tests | Jest, Supertest, mongodb-memory-server, Vitest, React Testing Library |
 
 ## Prerequisites
 
-- Node.js 24 (the tested version is recorded in `.nvmrc`)
-- npm 11+
-- MongoDB 8 locally, in Docker, or through MongoDB Atlas
-- Google and Facebook developer applications only if testing social login
+Choose the prerequisites for the way you want to run the project:
 
-## Installation
+- Docker setup: Docker Desktop with Docker Compose
+- Without Docker: Node.js `24.4.1` (see `.nvmrc`), npm 11+, and a running MongoDB instance
+- Google and Facebook developer applications are needed only for social login
 
-From the project root:
+## Quick start with Docker
+
+Docker Compose runs MongoDB, creates the database indexes, starts the API, and serves the built React application through Nginx.
+
+### 1. Create the backend environment file
+
+From the repository root:
 
 ```powershell
-npm.cmd ci
 Copy-Item backend/.env.example backend/.env
-Copy-Item frontend/.env.example frontend/.env
 ```
 
-On shells where `npm` is directly available, use `npm` instead of `npm.cmd`.
+On macOS or Linux:
 
-Generate independent JWT secrets instead of retaining the example values:
+```bash
+cp backend/.env.example backend/.env
+```
 
-```powershell
+Open `backend/.env` and replace both JWT example secrets. Generate two different secrets by running this command twice:
+
+```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
 
-Run that command twice and set different values for `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`.
+Set the results as `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`. The remaining local Docker values are supplied by `docker-compose.yml`; OAuth credentials may remain empty.
 
-## MongoDB setup
+### 2. Build and start the stack
 
-Use an existing MongoDB URI in `backend/.env`, or start the included Docker service:
-
-```powershell
-docker compose up -d mongodb
-```
-
-The default development URI is:
-
-```text
-mongodb://127.0.0.1:27017/mern_blog
-```
-
-The Compose-managed MongoDB is bound to `127.0.0.1:27018` by default to avoid colliding with a locally installed MongoDB. Override `MONGODB_HOST_PORT` when invoking Compose if another host port is preferred; containers always use the internal `mongodb:27017` address.
-
-Create the declared indexes explicitly after the database is available:
-
-```powershell
-npm.cmd run db:indexes -w backend
-```
-
-The application also declares all indexes in its Mongoose schemas. Production operators should run the explicit command during deployment rather than depending on automatic index creation.
-
-## Environment configuration
-
-### Backend
-
-| Variable | Purpose |
-| --- | --- |
-| `NODE_ENV` | `development`, `test`, or `production` |
-| `PORT` | Express port; default example is `5000` |
-| `TRUST_PROXY_HOPS` | Number of trusted proxy hops; keep `0` locally |
-| `LOG_LEVEL` | Pino level such as `info` |
-| `MONGODB_URI` | MongoDB connection string |
-| `FRONTEND_URL` | Exact browser origin allowed by CORS and origin checks |
-| `BACKEND_URL` | Public backend URL used for OAuth initiation links |
-| `JWT_ACCESS_SECRET` | Independent secret of at least 32 characters |
-| `JWT_REFRESH_SECRET` | Different independent secret of at least 32 characters |
-| `JWT_ISSUER` | Expected JWT issuer |
-| `JWT_ACCESS_AUDIENCE` | Access-token audience |
-| `JWT_REFRESH_AUDIENCE` | Refresh-token audience |
-| `JWT_ACCESS_TTL_SECONDS` | Access lifetime; specified default is 900 seconds |
-| `JWT_REFRESH_TTL_SECONDS` | Session lifetime; specified default is 604800 seconds |
-| `BCRYPT_ROUNDS` | bcrypt work factor; specified default is 12 |
-| `COOKIE_SECURE` | `true` in HTTPS production, `false` on local HTTP |
-| `GOOGLE_CLIENT_ID/SECRET` | Optional pair enabling Google login |
-| `GOOGLE_CALLBACK_URL` | Exact registered Google callback |
-| `FACEBOOK_CLIENT_ID/SECRET` | Optional pair enabling Facebook login |
-| `FACEBOOK_CALLBACK_URL` | Exact registered Facebook callback |
-| `*_RATE_*` | Authentication rate-limit windows and maxima |
-| `ADMIN_*`, `SEED_*` | Read only by bootstrap/seed scripts |
-
-Both values in an OAuth credential pair must be supplied together. If a pair is absent, that provider is reported as unavailable and the rest of the application starts normally. Production configuration requires HTTPS URLs and secure cookies.
-
-### Frontend
-
-`VITE_API_BASE_URL` is the public API root, normally `http://localhost:5000/api/v1` during local development and `/api/v1` in a same-origin production deployment. Never put private values in a `VITE_*` variable.
-
-## Development
-
-Open two terminals in the project root:
-
-```powershell
-npm.cmd run dev:backend
-```
-
-```powershell
-npm.cmd run dev:frontend
-```
-
-Open `http://localhost:5173`. The API health endpoint is `http://localhost:5000/health`.
-
-## Docker Compose
-
-The Compose stack builds and runs the complete application:
-
-- MongoDB 8 with a persistent named volume
-- a one-shot database migration job that creates all declared indexes
-- the compiled Express/Socket.io backend
-- the compiled React frontend served by Nginx
-- an opt-in, idempotent development seed job
-
-Create `backend/.env` first and replace the example JWT secrets. The Compose file overrides container-only values such as the MongoDB hostname and the same-origin public URLs, while retaining credentials and optional OAuth settings from that file.
-
-Build and start MongoDB, run the migration, and start both applications:
-
-```powershell
+```bash
 docker compose up --build -d
 ```
 
-Open `http://localhost:5173`. Nginx serves the SPA and proxies `/api` and `/socket.io` to the backend. The backend waits for MongoDB and a successful migration before starting; the frontend waits for the backend health check.
+Open the application at <http://localhost:5173>. Use `docker compose ps` to check the backend and frontend health status. The frontend proxies `/api` and `/socket.io` to the backend; the backend is intentionally not published directly to the host in the full Docker setup.
 
-Load the idempotent development seed only when demo data is wanted:
+### 3. Optionally load demo data
 
-```powershell
+```bash
 docker compose --profile tools run --rm seed
 ```
 
-Rerun the migration/index job manually after a schema-index change:
+The seed is optional and safe to run more than once. See [Seed data](#seed-data) for the accounts and inserted records.
 
-```powershell
-docker compose run --rm migrate
-```
+### 4. Inspect or stop the stack
 
-Inspect status and logs or stop the stack with:
-
-```powershell
+```bash
 docker compose ps
 docker compose logs -f backend frontend
 docker compose down
 ```
 
-The database volume survives `docker compose down`. Use `docker compose down --volumes` only when intentionally discarding all local database data.
+`docker compose down` keeps the MongoDB data in the `mern_blog_data` volume. To deliberately delete all Compose-managed database data, use `docker compose down --volumes`.
 
-For OAuth in the Compose stack, register these local callback URLs with the providers:
+## Start without Docker
+
+This path runs the backend and frontend with npm and connects to MongoDB on the host.
+
+### 1. Install all workspace dependencies
+
+From the repository root:
+
+```bash
+npm ci
+```
+
+PowerShell users may use `npm.cmd` instead of `npm` if script execution policy blocks `npm.ps1`.
+
+### 2. Create the environment files
+
+PowerShell:
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
+```
+
+macOS or Linux:
+
+```bash
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env
+```
+
+In `backend/.env`:
+
+- Set two different, random values for `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`.
+- Keep `MONGODB_URI=mongodb://127.0.0.1:27017/mern_blog` for a default local MongoDB installation, or replace it with your MongoDB/Atlas URI.
+- Keep `FRONTEND_URL=http://localhost:5173` and `BACKEND_URL=http://localhost:5000` for local development.
+- OAuth credentials can remain empty.
+
+The default `frontend/.env` already points to `http://localhost:5000/api/v1`.
+
+### 3. Start MongoDB and create indexes
+
+Start your local MongoDB service, then run:
+
+```bash
+npm run db:indexes -w backend
+```
+
+### 4. Start the backend and frontend
+
+Open two terminals at the repository root.
+
+Terminal 1:
+
+```bash
+npm run dev:backend
+```
+
+Terminal 2:
+
+```bash
+npm run dev:frontend
+```
+
+Open:
+
+- Application: <http://localhost:5173>
+- API health check: <http://localhost:5000/health>
+
+### 5. Optionally load demo data
+
+With MongoDB running:
+
+```bash
+npm run seed -w backend
+```
+
+## Use Docker only for MongoDB
+
+This hybrid workflow is useful when you want hot-reloading Node.js processes but do not have MongoDB installed locally.
+
+```bash
+docker compose up -d mongodb
+```
+
+Compose publishes MongoDB on host port `27018` to avoid clashing with a locally installed MongoDB. Update `backend/.env` accordingly:
+
+```dotenv
+MONGODB_URI=mongodb://127.0.0.1:27018/mern_blog
+```
+
+Then create indexes and start both development servers:
+
+```bash
+npm run db:indexes -w backend
+npm run dev:backend
+```
+
+In a second terminal:
+
+```bash
+npm run dev:frontend
+```
+
+Optionally seed from a third terminal:
+
+```bash
+npm run seed -w backend
+```
+
+To use another MongoDB host port, set `MONGODB_HOST_PORT` when starting Compose and use the same port in `MONGODB_URI`.
+
+PowerShell example:
+
+```powershell
+$env:MONGODB_HOST_PORT=27019
+docker compose up -d mongodb
+```
+
+## Seed data
+
+The regular seed script is intended only for development and refuses to run when `NODE_ENV=production`. It is idempotent: existing seed records and credentials are not overwritten.
+
+Run it according to your setup:
+
+```bash
+# Full Docker stack
+docker compose --profile tools run --rm seed
+
+# Backend running locally, including the hybrid MongoDB setup
+npm run seed -w backend
+```
+
+It creates the protected admin and demo user when they do not exist, plus five sample posts and two comments per post.
+
+Default credentials from `backend/.env.example`:
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Admin | `admin@example.test` | `DemoAdmin!2026` |
+| User | `user@example.test` | `DemoUser!2026` |
+
+Change `ADMIN_NAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `SEED_USER_EMAIL`, and `SEED_USER_PASSWORD` in `backend/.env` before seeding a shared development environment.
+
+To create only the protected administrator without sample content:
+
+```bash
+npm run admin:create -w backend
+```
+
+This command requires `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD` and does not overwrite or promote an existing account.
+
+## Environment variables
+
+### Backend
+
+The backend loads `backend/.env` through `dotenv`.
+
+| Variable | Purpose |
+| --- | --- |
+| `NODE_ENV` | `development`, `test`, or `production` |
+| `PORT` | Express port; defaults to `5000` |
+| `MONGODB_URI` | MongoDB connection string |
+| `FRONTEND_URL` | Exact browser origin allowed by CORS |
+| `BACKEND_URL` | Public backend URL used to start OAuth flows |
+| `JWT_ACCESS_SECRET` | Access-token secret; at least 32 characters |
+| `JWT_REFRESH_SECRET` | Different refresh-token secret; at least 32 characters |
+| `JWT_*_TTL_SECONDS` | Access and refresh token lifetimes |
+| `COOKIE_SECURE` | `false` for local HTTP; `true` for HTTPS production |
+| `GOOGLE_*`, `FACEBOOK_*` | Optional OAuth credentials and callback URLs |
+| `*_RATE_*` | Authentication rate-limit windows and limits |
+| `ADMIN_*`, `SEED_*` | Values used by admin and seed scripts |
+
+OAuth provider pairs must be configured together. If credentials are absent, the rest of the application still works and the provider is reported as unavailable.
+
+### Frontend
+
+`VITE_API_BASE_URL` is the public REST API root:
+
+- Local npm development: `http://localhost:5000/api/v1`
+- Docker/Nginx build: `/api/v1`
+
+Never store secrets in a `VITE_*` variable because Vite embeds those values in the browser bundle.
+
+## Architecture
+
+### Request and data flow
 
 ```text
-http://localhost:5173/api/v1/auth/google/callback
-http://localhost:5173/api/v1/auth/facebook/callback
+Browser
+  |
+  +-- React Router pages and layouts
+  |     |
+  |     +-- AuthContext / NotificationContext
+  |              |
+  +---------- Axios + Socket.io client
+                     |
+              Express / Socket.io
+                     |
+        routes -> middleware -> controllers
+                                  |
+                               services
+                                  |
+                          Mongoose models
+                                  |
+                               MongoDB
 ```
 
-This Compose configuration targets local development/demo use over HTTP, so it runs the compiled backend with `NODE_ENV=development` and non-secure local cookies. A public deployment must use HTTPS, secure cookies, production public URLs, and deployment-specific secrets.
+- Routes define endpoints and attach validation, authentication, role, and ownership middleware.
+- Controllers translate HTTP input into service calls and standardized responses.
+- Services contain application and authorization rules.
+- Mongoose models define persistence and indexes.
+- React contexts own session and notification state; pages compose reusable components and API calls.
 
-## Production build
-
-```powershell
-npm.cmd run typecheck --workspaces
-npm.cmd run build --workspaces
-npm.cmd run start -w backend
-```
-
-The backend build starts from `backend/dist/src/server.js`. Deploy `frontend/dist` with SPA fallback to `index.html`, proxy `/api` to Express, and keep the frontend/API on the same origin. Use HTTPS and `COOKIE_SECURE=true`.
-
-## Admin bootstrap and seed
-
-Set `ADMIN_NAME`, `ADMIN_EMAIL`, and `ADMIN_PASSWORD`, then create the protected initial administrator:
-
-```powershell
-npm.cmd run admin:create -w backend
-```
-
-The command is idempotent and will not silently promote or overwrite an existing account.
-
-For disposable development data only:
-
-```powershell
-npm.cmd run seed -w backend
-```
-
-The seed refuses to run in production. With the example environment it proposes:
+### Repository map
 
 ```text
-admin@example.test / DemoAdmin!2026
-user@example.test  / DemoUser!2026
+mern-blog-assignment/
+|-- docker-compose.yml        # MongoDB, migration, API, frontend, and seed services
+|-- package.json              # npm workspaces and repository-level commands
+|-- backend/
+|   |-- scripts/              # index creation, admin creation, seed, and reset utilities
+|   |-- src/
+|   |   |-- config/           # environment, database, cookies, Passport, and logging
+|   |   |-- controllers/      # HTTP request/response handlers
+|   |   |-- middleware/       # auth, roles, ownership, validation, rate limits, errors
+|   |   |-- models/           # Mongoose schemas
+|   |   |-- routes/           # /api/v1 route definitions
+|   |   |-- services/         # business logic
+|   |   |-- socket/           # authenticated Socket.io server
+|   |   |-- validators/       # Zod request schemas
+|   |   |-- tests/            # unit and integration tests
+|   |   |-- app.ts            # Express middleware and route assembly
+|   |   `-- server.ts         # database connection and HTTP/Socket.io startup
+|   |-- .env.example
+|   `-- Dockerfile
+`-- frontend/
+    |-- src/
+    |   |-- api/              # Axios client and typed API functions
+    |   |-- components/       # shared feature and UI components
+    |   |-- context/          # authentication and notification state
+    |   |-- layouts/          # public/user and admin shells
+    |   |-- pages/            # route-level screens
+    |   |-- routes/           # router and access guards
+    |   |-- socket/           # Socket.io browser client
+    |   |-- tests/            # frontend tests
+    |   `-- main.tsx          # React entry point
+    |-- .env.example
+    |-- nginx.conf            # SPA fallback and API/WebSocket proxy
+    `-- Dockerfile
 ```
 
-Change those values for any shared environment. The script does not print passwords or overwrite existing account credentials.
+### Where to make common changes
 
-## Authentication behavior
+| Task | Start here |
+| --- | --- |
+| Add or change an API endpoint | `backend/src/routes`, then `controllers`, `services`, and `validators` |
+| Change database fields or indexes | `backend/src/models`, then run the index command |
+| Change authentication | `backend/src/services/auth.service.ts`, auth middleware, and `frontend/src/context/AuthContext.tsx` |
+| Add a page or URL | `frontend/src/pages` and `frontend/src/routes/AppRouter.tsx` |
+| Change navigation | `frontend/src/components/Header.tsx`, `MobileNavigation.tsx`, or `layouts/AdminLayout.tsx` |
+| Change API calls | `frontend/src/api` and `frontend/src/types/api.ts` |
+| Change real-time notifications | `backend/src/socket`, notification service, and `frontend/src/context/NotificationContext.tsx` |
+| Add tests | `backend/src/tests` or `frontend/src/tests` |
 
-- Access tokens expire after 15 minutes and are retained only in React memory.
-- The refresh token is an HttpOnly, SameSite=Lax cookie scoped to `/api/v1/auth`.
-- The database retains only a SHA-256 hash of the current refresh token.
-- Refreshing rotates the token without extending the original seven-day session.
-- Reuse of a correctly signed, older refresh token revokes the browser session.
-- Protected calls verify the session, active user, and authentication version on every request.
-- Role or active-status changes invalidate the user's existing sessions.
-- Logout revokes the current session and clears its cookie.
+## Navigating the application
 
-## Google OAuth setup
+The main browser routes are:
 
-1. Create a web application in Google Cloud Console and configure its consent screen.
-2. Register this exact local redirect URI:
+| URL | Access | Purpose |
+| --- | --- | --- |
+| `/` or `/posts` | Public | Browse active posts |
+| `/posts/:slug` | Public | Read a post and its comments |
+| `/login`, `/register` | Public | Authenticate or create an account |
+| `/dashboard` | Signed-in user | View and manage the current user's posts |
+| `/posts/new` | Signed-in user | Create a post |
+| `/posts/:id/edit` | Owner or admin | Edit a post |
+| `/account` | Signed-in user | View account details and link OAuth providers |
+| `/admin` | Admin | Dashboard totals |
+| `/admin/users` | Admin | Manage users |
+| `/admin/posts` | Admin | Moderate active and deleted posts |
+| `/admin/comments` | Admin | Moderate comments |
 
-   ```text
-   http://localhost:5000/api/v1/auth/google/callback
-   ```
+Use the header on desktop or the mobile menu to reach posts, the user dashboard, account settings, and admin area. The notification bell opens persistent notifications and links to the related post.
 
-3. Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL`.
-4. Add local tester accounts if the consent screen remains in test mode.
+## Useful commands
 
-The application requests only profile and email identity information. Provider tokens are discarded after identity resolution.
+Run commands from the repository root.
 
-## Facebook OAuth setup
+| Command | Purpose |
+| --- | --- |
+| `npm run dev:backend` | Start the API in watch mode |
+| `npm run dev:frontend` | Start Vite in development mode |
+| `npm run db:indexes -w backend` | Create declared MongoDB indexes |
+| `npm run seed -w backend` | Add idempotent demo data |
+| `npm run admin:create -w backend` | Create the protected admin only |
+| `npm run typecheck --workspaces` | Type-check both workspaces |
+| `npm run test --workspaces` | Run backend and frontend tests |
+| `npm run test:coverage -w backend` | Run backend tests with coverage |
+| `npm run build --workspaces` | Build both workspaces |
+| `npm run start -w backend` | Start the compiled backend |
 
-1. Create a Meta developer app with Facebook Login for the web.
-2. Register this exact local redirect URI:
-
-   ```text
-   http://localhost:5000/api/v1/auth/facebook/callback
-   ```
-
-3. Set `FACEBOOK_CLIENT_ID`, `FACEBOOK_CLIENT_SECRET`, and `FACEBOOK_CALLBACK_URL`.
-4. Use a developer/test account while the app is not live.
-
-Provider identities are never linked merely because an email matches. Sign into the existing account and use **Account → Connect** to link explicitly. Provider accounts without an email remain valid provider-only users.
+The backend integration suite uses `mongodb-memory-server`; it does not use or modify the development database.
 
 ## API overview
 
-All application routes use `/api/v1`. Protected routes require `Authorization: Bearer <access-token>`.
+All REST endpoints are under `/api/v1`. Protected endpoints use `Authorization: Bearer <access-token>`.
 
-| Group | Endpoints |
+| Group | Main endpoints |
 | --- | --- |
-| Auth | `POST /auth/register`, `/login`, `/refresh`, `/logout`; `GET /auth/me`, `/providers` |
-| OAuth | `GET /auth/{google,facebook}`, callbacks; `POST /auth/{provider}/link` |
-| Users | Admin `GET/POST /users`, `GET/PATCH/DELETE /users/:id` |
-| Posts | `GET/POST /posts`, `GET /posts/slug/:slug`, `GET/PATCH/DELETE /posts/:id` |
-| Comments | `GET/POST /posts/:postId/comments`, `GET/PATCH/DELETE /comments/:id` |
-| Notifications | `GET /notifications`, `PATCH /notifications/read-all`, `PATCH /notifications/:id/read` |
-| Admin | `GET /admin/stats`, `/admin/posts`, `/admin/comments` |
+| Auth | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`, `/auth/providers` |
+| OAuth | `/auth/google`, `/auth/facebook`, callbacks, and provider linking |
+| Users | `/users` and `/users/:id` for admin management |
+| Posts | `/posts`, `/posts/:id`, and `/posts/slug/:slug` |
+| Comments | `/posts/:postId/comments` and `/comments/:id` |
+| Notifications | `/notifications`, `/notifications/read-all`, and `/notifications/:id/read` |
+| Admin | `/admin/stats`, `/admin/posts`, and `/admin/comments` |
 
-Successful responses follow:
+The health endpoint is `/health`, outside the `/api/v1` prefix.
+
+Successful responses use this shape:
 
 ```json
 { "success": true, "message": "...", "data": {}, "meta": null }
 ```
 
-Errors follow:
+Errors use this shape:
 
 ```json
 {
@@ -314,86 +436,32 @@ Errors follow:
 }
 ```
 
-Paginated responses use `meta: { page, limit, total, totalPages }`. Maximum page size is 50.
+## OAuth setup
 
-## Real-time notifications (Socket.io)
+OAuth is optional. For npm-based local development, register these callback URLs with the providers:
 
-Real-time notifications are delivered using Socket.io and backed by persistent MongoDB storage:
-
-- **Socket Authentication**: Connections authenticate during handshake via `auth.accessToken`. The token and session are validated against database records (`isActive`, session revocation, expiration, and `authVersion`). Sockets join a private room `user:<userId>`.
-- **Continuous Authorization**: Connected sockets are checked at access-token expiration, periodically revalidated every 30 seconds, and verified immediately before delivering private notifications. If a session is revoked or invalidated, `auth:error` is emitted and the socket is disconnected.
-- **Socket Events**:
-  - `notification:new`: Emitted to the post owner's room when a new comment is posted on their post (comment author excluded).
-  - `notifications:changed`: Emitted when notifications are marked as read, signaling connected tabs to refresh authoritative state.
-  - `auth:error`: Sanitized authentication error notification (`ACCESS_TOKEN_EXPIRED`, `SESSION_INVALID`, `SERVICE_UNAVAILABLE`).
-- **Deployment & Proxy Setup**: In production, reverse proxies (such as Nginx) must forward both `/api` and `/socket.io` to the backend Node process, enabling HTTP polling fallback and WebSocket upgrades (`Upgrade $http_upgrade` and `Connection "upgrade"`).
-
-## Permissions
-
-| Action | Visitor | User | Admin |
-| --- | ---: | ---: | ---: |
-| Read active posts/comments | Yes | Yes | Yes |
-| Create posts/comments | No | Yes | Yes |
-| Edit/delete own content | No | Yes | Yes |
-| Edit/delete another user's content | No | No | Yes |
-| Access notifications | No | Yes (own only) | Yes (own only) |
-| Manage users and dashboard | No | No | Yes |
-| Inspect deleted posts/comments | No | No | Yes |
-
-Post deletion is soft deletion. Deleted posts and their retained comments disappear from ordinary access. Comment deletion is permanent. User deletion means deactivation so historical authorship remains intact. Notifications are strictly private to their recipient; admins have no override to inspect or mark other users' notifications.
-
-## Verification & tests
-
-The backend integration suite downloads a temporary MongoDB binary on its first run and never uses the development database. The frontend suite tests routing, layout, authentication guards, real-time Socket.io notification updates, confirmation dialogs, forms, and presentation components.
-
-```powershell
-# Frontend verification: typecheck, tests, and production build
-npm.cmd run typecheck -w frontend
-npm.cmd test -w frontend
-npm.cmd run build -w frontend
-
-# Full test suite across workspaces
-npm.cmd run test --workspaces
-npm.cmd run test:coverage -w backend
+```text
+http://localhost:5000/api/v1/auth/google/callback
+http://localhost:5000/api/v1/auth/facebook/callback
 ```
 
-The backend suite covers local authentication, refresh rotation/reuse, origin protection, validation, ownership, admin overrides, soft deletion, comment moderation, bootstrap-admin protection, dashboard totals, notification REST persistence/authorization, and real Socket.io integration. Frontend tests cover protected/admin guards, pagination, safe text rendering, notification bell interactions, real-time socket handling, auth generation refresh guards, desktop and mobile navigation, confirmation/edit dialogs, and shared presentation cards.
+For the full Docker stack, the browser reaches the backend through Nginx, so use:
 
-## Activity logging
+```text
+http://localhost:5173/api/v1/auth/google/callback
+http://localhost:5173/api/v1/auth/facebook/callback
+```
 
-Pino emits structured records for login/registration/logout, OAuth operations, post/comment mutations, and admin user changes. Logs include request, actor, action, resource, outcome, status, and duration. Passwords, cookies, authorization headers, provider tokens, and request bodies are never logged.
+Set the matching client ID, client secret, and callback URL in `backend/.env`. Provider identities are linked explicitly from the signed-in account page; matching email addresses are not linked automatically.
 
-## Known limitations
+## Production notes
 
-- Posts and comments are plain text rather than rich text.
-- Password recovery, email verification, MFA, post restoration, and account merging are outside the assignment.
-- The in-memory rate limiter and Socket.io server assume a single API instance. Deploying across multiple backend instances requires a shared rate-limit store and `@socket.io/redis-adapter`.
-- Standalone MongoDB write reliability boundary: If the database or process fails between comment persistence and notification creation, the comment persists while the notification failure is caught and logged.
-- OAuth provider availability depends on external credentials, provider-console configuration, and test-account access.
-- Offset pagination is appropriate for this assignment but is not a stable snapshot during concurrent writes.
+```bash
+npm run typecheck --workspaces
+npm run build --workspaces
+npm run start -w backend
+```
 
-## Demo video flow
+The backend entry point is `backend/dist/src/server.js`. Deploy `frontend/dist` with SPA fallback to `index.html`, proxy `/api` and `/socket.io` to the backend, and keep the frontend and API on the same public origin where possible.
 
-A complete demonstration fits in ten minutes:
-
-1. Browse the public list and details.
-2. Register, log out, log in, and refresh the page.
-3. Show Google and Facebook login using configured test accounts.
-4. Create, edit, and soft-delete a post.
-5. Create, edit, and delete a comment; show an ownership rejection.
-6. **Real-time notifications demo**:
-   - Open Browser A (User A) and Browser B / incognito (User B).
-   - User B has a published post.
-   - User A adds a comment to User B's post.
-   - User B's notification bell unread badge updates immediately without refreshing.
-   - User B clicks the bell, inspects the new notification snapshot, and clicks to navigate or marks it as read.
-   - Refresh User B's browser to prove persistence in MongoDB.
-   - Show that commenting on one's own post produces no self-notification.
-   - Show that User A cannot view or manipulate User B's notifications.
-7. Log in as admin and inspect dashboard totals.
-8. Create, edit, deactivate, and reactivate a user.
-9. Edit another user's post, inspect deleted posts, and moderate comments.
-10. Show passing tests, repository structure, and this README.
-
-Never show real secrets, provider credentials, cookies, or tokens in the recording.
-
+Production configuration requires HTTPS URLs and `COOKIE_SECURE=true`. Use deployment-specific JWT secrets and OAuth credentials, run `npm run db:indexes -w backend` during deployment, and do not run the development seed in production.
